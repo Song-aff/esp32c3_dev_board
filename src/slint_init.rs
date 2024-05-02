@@ -5,9 +5,11 @@ extern crate core;
 extern crate alloc;
 use alloc::boxed::Box;
 use alloc::rc::Rc;
+use critical_section::Mutex;
 use mipidsi::options::{Orientation, Rotation};
 
 // use crate::COUNT;
+use crate::sw::*;
 use core::cell::RefCell;
 use display_interface_spi::SPIInterface;
 use esp_backtrace as _;
@@ -16,16 +18,14 @@ use hal::spi::master::Spi;
 use hal::{
     clock::{ClockControl, CpuClock},
     delay::Delay,
-    gpio::{self, IO},
+    gpio::{self, Event, IO},
     peripherals::Peripherals,
     prelude::*,
     spi::SpiMode,
     systimer::SystemTimer,
 };
 use mipidsi::{models::ST7796, Display};
-
 slint::include_modules!();
-
 pub fn slint_init() {
     slint::platform::set_platform(Box::new(EspBackend::default()))
         .expect("backend already initialized");
@@ -33,31 +33,44 @@ pub fn slint_init() {
     let main_window = Recipe::new().unwrap();
 
     let strong = main_window.clone_strong();
-    let timer = slint::Timer::default();
-    // let timer1 = slint::Timer::default();
-    timer.start(
-        slint::TimerMode::Repeated,
-        core::time::Duration::from_millis(1000),
-        move || {
-            if strong.get_counter() <= 0 {
-                strong.set_counter(25);
-            } else {
-                strong.set_counter(0);
-            }
-        },
-    );
-    // timer1.start(
+    // let timer = slint::Timer::default();
+    let cmd_timer = slint::Timer::default();
+    // timer.start(
     //     slint::TimerMode::Repeated,
     //     core::time::Duration::from_millis(1000),
-    //     || {
-    //         // critical_section::with(|cs| {
-    //         //     let mut count = COUNT.borrow_ref_mut(cs);
-    //         //     *count += 1;
-    //         //     println!("{}", count);
-    //         // });
-    //         println!("timer1!!");
+    //     move || {
+    //         if strong.get_counter() <= 0 {
+    //             strong.set_counter(25);
+    //         } else {
+    //             strong.set_counter(0);
+    //         }
     //     },
     // );
+    cmd_timer.start(
+        slint::TimerMode::Repeated,
+        core::time::Duration::from_millis(20),
+        move || {
+            critical_section::with(|cs| {
+                let cmd = ControlCMD.borrow_ref_mut(cs).consume();
+                let counter = strong.get_counter();
+                match cmd {
+                    CMD::Plus => {
+                        strong.set_counter(counter + 1);
+                        println!("{}", counter);
+                    }
+                    CMD::Reduce => {
+                        strong.set_counter(counter - 1);
+                        println!("{}", counter);
+                    }
+                    CMD::None => {}
+                    CMD::Reset => {
+                        strong.set_counter(0);
+                        println!("{}", counter);
+                    }
+                }
+            });
+        },
+    );
 
     main_window.run().unwrap();
 }
@@ -90,8 +103,21 @@ impl slint::platform::Platform for EspBackend {
         let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock160MHz).freeze();
 
         let mut delay = Delay::new(&clocks);
-        let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
+        let mut io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
 
+        //
+        io.set_interrupt_handler(handler);
+        let mut sw_a = io.pins.gpio7.into_pull_down_input();
+        let sw_b = io.pins.gpio11.into_pull_down_input();
+        let mut sw_key = io.pins.gpio5.into_pull_up_input();
+        critical_section::with(|cs| {
+            sw_key.listen(Event::FallingEdge);
+            sw_a.listen(Event::RisingEdge);
+            SW_A.borrow_ref_mut(cs).replace(sw_a);
+            SW_B.borrow_ref_mut(cs).replace(sw_b);
+            SW_KEY.borrow_ref_mut(cs).replace(sw_key);
+        });
+        //
         let clk = io.pins.gpio2.into_push_pull_output();
         let sdo = io.pins.gpio10.into_push_pull_output();
         let cs = io.pins.gpio19.into_push_pull_output();
@@ -132,9 +158,25 @@ impl slint::platform::Platform for EspBackend {
             buffer: &mut [slint::platform::software_renderer::Rgb565Pixel::default(); 320],
         };
 
+        // let main_window = Recipe::new().unwrap();
+        // let strong = main_window.clone_strong();
+        // let counter = strong.get_counter();
         loop {
             slint::platform::update_timers_and_animations();
-
+            // critical_section::with(|cs| {
+            //     let cmd = ControlCMD.borrow_ref_mut(cs).consume();
+            //     match cmd {
+            //         CMD::Plus => {
+            //             strong.set_counter(counter + 1);
+            //             println!("{}", counter);
+            //         }
+            //         CMD::Reduce => {
+            //             strong.set_counter(counter - 1);
+            //             println!("{}", counter);
+            //         }
+            //         CMD::None => {}
+            //     }
+            // });
             if let Some(window) = self.window.borrow().clone() {
                 window.draw_if_needed(|renderer| {
                     renderer.render_by_line(&mut buffer_provider);

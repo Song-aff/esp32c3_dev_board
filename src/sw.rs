@@ -19,33 +19,59 @@ use hal::{
     prelude::*,
 };
 
-static SW_A: Mutex<RefCell<Option<Gpio7<Input<PullDown>>>>> = Mutex::new(RefCell::new(None));
-static SW_B: Mutex<RefCell<Option<Gpio11<Input<PullDown>>>>> = Mutex::new(RefCell::new(None));
-static SW_KEY: Mutex<RefCell<Option<Gpio5<Input<PullUp>>>>> = Mutex::new(RefCell::new(None));
-pub static COUNT: Mutex<RefCell<i32>> = Mutex::new(RefCell::new(0));
+pub static SW_A: Mutex<RefCell<Option<Gpio7<Input<PullDown>>>>> = Mutex::new(RefCell::new(None));
+pub static SW_B: Mutex<RefCell<Option<Gpio11<Input<PullDown>>>>> = Mutex::new(RefCell::new(None));
+pub static SW_KEY: Mutex<RefCell<Option<Gpio5<Input<PullUp>>>>> = Mutex::new(RefCell::new(None));
+pub static ControlCMD: Mutex<RefCell<Control>> =
+    Mutex::new(RefCell::new(Control { cmd: CMD::None }));
 
-pub fn init_sw() {
-    let peripherals = Peripherals::take();
-    let system = peripherals.SYSTEM.split();
-    let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock160MHz).freeze();
-    // let mut delay = Delay::new(&clocks);
-    let mut io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
-    io.set_interrupt_handler(handler);
-    let mut sw_a = io.pins.gpio7.into_pull_down_input();
-    let sw_b = io.pins.gpio11.into_pull_down_input();
-    let mut sw_key = io.pins.gpio5.into_pull_up_input();
-    critical_section::with(|cs| {
-        sw_key.listen(Event::FallingEdge);
-        sw_a.listen(Event::RisingEdge);
-        SW_A.borrow_ref_mut(cs).replace(sw_a);
-        SW_B.borrow_ref_mut(cs).replace(sw_b);
-        SW_KEY.borrow_ref_mut(cs).replace(sw_key);
-    });
+#[derive(Debug)]
+pub enum CMD {
+    Plus,
+    Reduce,
+    Reset,
+    None,
+}
+pub struct Control {
+    cmd: CMD,
+}
+impl Control {
+    pub fn new() -> Self {
+        Control { cmd: CMD::None }
+    }
+    pub fn set_plus(&mut self) {
+        self.cmd = CMD::Plus;
+    }
+    pub fn set_reduce(&mut self) {
+        self.cmd = CMD::Reduce;
+    }
+    pub fn set_reset(&mut self) {
+        self.cmd = CMD::Reset;
+    }
+    pub fn consume(&mut self) -> CMD {
+        let output;
+        match self.cmd {
+            CMD::Plus => {
+                output = CMD::Plus;
+            }
+            CMD::Reduce => {
+                output = CMD::Reduce;
+            }
+            CMD::Reset => {
+                output = CMD::Reset;
+            }
+            CMD::None => {
+                output = CMD::None;
+            }
+        }
+        self.cmd = CMD::None;
+        output
+    }
 }
 
 #[handler]
 #[ram]
-fn handler() {
+pub fn handler() {
     critical_section::with(|cs| {
         // let mut binding = SW_A.borrow_ref_mut(cs);
         // let mut sw_a = binding.as_mut().unwrap();
@@ -56,23 +82,22 @@ fn handler() {
         let sw_b = sw_b_ref.as_ref().unwrap();
         let mut sw_key_ref = SW_KEY.borrow_ref_mut(cs);
         let mut sw_key = sw_key_ref.as_mut().unwrap();
+        let mut control = ControlCMD.borrow_ref_mut(cs);
         if sw_a.is_interrupt_set() {
-            if sw_b.is_high() {
-                println!("+++");
-            } else {
-                println!("---");
+            if sw_a.is_high() {
+                if sw_b.is_high() {
+                    control.set_plus();
+                    // println!("+++");
+                } else {
+                    control.set_reduce();
+                    // println!("---");
+                }
             }
             sw_a.clear_interrupt();
         } else {
+            control.set_reset();
             sw_key.clear_interrupt();
         }
-
-        println!(
-            "a:{},b:{},sw_key:{}",
-            sw_a.is_high(),
-            sw_b.is_high(),
-            sw_key.is_high()
-        );
 
         // SW_A.borrow_ref_mut(cs).as_mut().unwrap().clear_interrupt();
     });

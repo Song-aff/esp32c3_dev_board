@@ -20,7 +20,6 @@ use hal::{
 mod slint_init;
 use slint_init::slint_init;
 mod sw;
-use sw::init_sw;
 #[global_allocator]
 static ALLOCATOR: esp_alloc::EspHeap = esp_alloc::EspHeap::empty();
 
@@ -38,8 +37,6 @@ slint::include_modules!();
 #[entry]
 fn main() -> ! {
     init_heap();
-    // slint_init();
-    init_sw();
-    // panic!("The MCU demo should not quit");
-    loop {}
+    slint_init();
+    panic!("The MCU demo should not quit");
 }

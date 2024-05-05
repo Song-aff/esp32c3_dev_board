@@ -7,6 +7,7 @@ use alloc::boxed::Box;
 use alloc::rc::Rc;
 use critical_section::Mutex;
 use mipidsi::options::{Orientation, Rotation};
+use slint::platform::software_renderer::MinimalSoftwareWindow;
 
 // use crate::COUNT;
 use crate::sw::*;
@@ -27,8 +28,16 @@ use hal::{
 use mipidsi::{models::ST7796, Display};
 slint::include_modules!();
 pub fn slint_init() {
-    slint::platform::set_platform(Box::new(EspBackend::default()))
-        .expect("backend already initialized");
+    let window = MinimalSoftwareWindow::new(
+        slint::platform::software_renderer::RepaintBufferType::ReusedBuffer,
+        // Default::default()
+    );
+
+    slint::platform::set_platform(Box::new(EspBackend {
+        window: window.clone(),
+        counter: 1,
+    }))
+    .expect("backend already initialized");
 
     let main_window = Recipe::new().unwrap();
 
@@ -75,20 +84,23 @@ pub fn slint_init() {
     main_window.run().unwrap();
 }
 
-#[derive(Default)]
+// #[derive(Default)]
 pub struct EspBackend {
-    window: RefCell<Option<Rc<slint::platform::software_renderer::MinimalSoftwareWindow>>>,
+    // window: RefCell<Option<Rc<slint::platform::software_renderer::MinimalSoftwareWindow>>>,
+    window: Rc<MinimalSoftwareWindow>,
+    counter: u8,
 }
 
 impl slint::platform::Platform for EspBackend {
     fn create_window_adapter(
         &self,
     ) -> Result<Rc<dyn slint::platform::WindowAdapter>, slint::PlatformError> {
-        let window = slint::platform::software_renderer::MinimalSoftwareWindow::new(
-            slint::platform::software_renderer::RepaintBufferType::ReusedBuffer,
-        );
-        self.window.replace(Some(window.clone()));
-        Ok(window)
+        // let window = slint::platform::software_renderer::MinimalSoftwareWindow::new(
+        //     slint::platform::software_renderer::RepaintBufferType::ReusedBuffer,
+        // );
+        // self.window.replace(Some(window.clone()));
+        // Ok(window)
+        Ok(self.window.clone())
     }
 
     fn duration_since_start(&self) -> core::time::Duration {
@@ -151,7 +163,7 @@ impl slint::platform::Platform for EspBackend {
 
         let size = slint::PhysicalSize::new(320, 480);
 
-        self.window.borrow().as_ref().unwrap().set_size(size);
+        self.window.set_size(size);
 
         let mut buffer_provider = DrawBuffer {
             display,
@@ -177,13 +189,11 @@ impl slint::platform::Platform for EspBackend {
             //         CMD::None => {}
             //     }
             // });
-            if let Some(window) = self.window.borrow().clone() {
-                window.draw_if_needed(|renderer| {
-                    renderer.render_by_line(&mut buffer_provider);
-                });
-                if window.has_active_animations() {
-                    continue;
-                }
+            self.window.draw_if_needed(|renderer| {
+                renderer.render_by_line(&mut buffer_provider);
+            });
+            if self.window.has_active_animations() {
+                continue;
             }
         }
     }

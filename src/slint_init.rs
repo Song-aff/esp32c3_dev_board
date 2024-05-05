@@ -3,18 +3,14 @@
 extern crate core;
 
 extern crate alloc;
-use alloc::boxed::Box;
 use alloc::rc::Rc;
+use alloc::{boxed::Box, string::ToString};
 use slint::platform::software_renderer::MinimalSoftwareWindow;
+use slint::SharedString;
 
 use crate::cmd::*;
-use core::cell::RefCell;
 use esp_println::println;
-use hal::spi::master::Spi;
-use hal::{
-    gpio::{self, Event, IO},
-    systimer::SystemTimer,
-};
+use hal::systimer::SystemTimer;
 use mipidsi::{models::ST7796, Display};
 slint::include_modules!();
 pub fn slint_init<
@@ -33,9 +29,10 @@ pub fn slint_init<
     }))
     .expect("backend already initialized");
 
-    let main_window = Recipe::new().unwrap();
+    let main_window = App::new().unwrap();
 
     let strong = main_window.clone_strong();
+    strong.set_todo_name(SharedString::from("songpengfei"));
     // let timer = slint::Timer::default();
     let cmd_timer = slint::Timer::default();
     // timer.start(
@@ -56,6 +53,7 @@ pub fn slint_init<
             critical_section::with(|cs| {
                 let cmd = CONTROL_CMD.borrow_ref_mut(cs).consume();
                 let counter = strong.get_counter();
+                let page_number: i32 = strong.get_page_number();
                 match cmd {
                     CMD::Plus => {
                         strong.set_counter(counter + 1);
@@ -65,9 +63,10 @@ pub fn slint_init<
                         strong.set_counter(counter - 1);
                         println!("{}", counter);
                     }
-                    CMD::Reset => {
-                        strong.set_counter(0);
-                        println!("{}", counter);
+                    CMD::KeyDown => {
+                        // strong.set_counter(0);
+                        strong.set_page_number((page_number + 1) % 3);
+                        println!("get_page_number:{}", (page_number + 1) % 3);
                     }
                     _ => {}
                 }

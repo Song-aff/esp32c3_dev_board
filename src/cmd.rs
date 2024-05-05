@@ -25,7 +25,7 @@ pub static CONTROL_CMD: Mutex<RefCell<Control>> =
 pub enum CMD {
     Plus,
     Reduce,
-    Reset,
+    KeyDown,
     None,
     Touch(i32, i32),
 }
@@ -42,8 +42,8 @@ impl Control {
     pub fn set_reduce(&mut self) {
         self.cmd = CMD::Reduce;
     }
-    pub fn set_reset(&mut self) {
-        self.cmd = CMD::Reset;
+    pub fn set_key_down(&mut self) {
+        self.cmd = CMD::KeyDown;
     }
     pub fn set_touch(&mut self, x: i32, y: i32) {
         self.cmd = CMD::Touch(x, y);
@@ -59,8 +59,8 @@ impl Control {
         //     CMD::Reduce => {
         //         output = CMD::Reduce;
         //     }
-        //     CMD::Reset => {
-        //         output = CMD::Reset;
+        //     CMD::KeyDown => {
+        //         output = CMD::KeyDown;
         //     }
         //     CMD::None => {
         //         output = CMD::None;
@@ -92,7 +92,7 @@ pub fn handler() {
             }
             sw_a.clear_interrupt();
         } else {
-            control.set_reset();
+            control.set_key_down();
             sw_key.clear_interrupt();
         }
     });

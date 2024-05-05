@@ -1,0 +1,100 @@
+import { HorizontalBox, VerticalBox, Button, ProgressIndicator } from "std-widgets.slint";
+import { ToDo } from "todo.slint";
+
+component Circle inherits Rectangle {
+    width: 15px;
+    // 缩小圆形的尺寸
+    height: 15px;
+    // 缩小圆形的尺寸
+    border-radius: root.width / 2;
+    callback test();
+    init => {
+        test()
+    }
+}
+
+export component App1 {
+    in-out property <int> counter;
+    in property <color> background: #ccc;
+    width: 100%;
+    height: 100%;
+    states [
+        left-aligned when counter > 0 || b1.pressed: {
+            circle1.x: 0px;
+            circle1.y: 40px;// 调整位置以适应屏幕
+            circle2.x: 0px;
+            circle2.y: 20px;// 调整位置以适应屏幕
+            in {
+                animate circle1.x, circle2.x, circle1.y, circle2.y { duration: 250ms; }
+            }
+            out {
+                animate circle1.x, circle2.x, circle1.y, circle2.y { duration: 500ms; }
+            }
+        }
+        right-aligned when counter <= 0: {
+            circle1.x: 93px;
+            circle1.y: 65px;// 调整位置以适应屏幕
+            circle2.x: 93px;
+            circle2.y: 0px;// 调整位置以适应屏幕
+        }
+    ]
+    VerticalBox {
+        padding: 10px;
+        HorizontalBox {
+            max-height: self.min-height;
+            width: 108px;
+            alignment: center;
+            b1 := Button {
+                text: "Press";
+                width: 80px;
+                // 适应屏幕宽度
+                height: 20px;
+                // 减小按钮高度以适应屏幕
+                function add(){
+                    root.counter += 10;
+                }
+                clicked => {
+                    add()
+                }
+            }
+        }
+
+        Rectangle {
+            background: background.darker(20%);
+            width: 108px;
+            // 适应屏幕宽度
+            height: 80px;
+            // 调整矩形高度以适应屏幕
+
+            circle1 := Circle {
+                y: 0;
+                background: green;
+                x: 42px;
+            }
+
+            // 调整位置以适应屏幕
+            circle2 := Circle {
+                background: blue;
+                x: 42px;
+                y: 20px;
+                // test => {
+                //     self.background = #ff0000;
+                // }
+            }
+
+            // 调整位置以适应屏幕
+        }
+    }
+
+    Text {
+        text: counter;
+        font-size: 100px;
+    }
+
+    ProgressIndicator {
+        y: 400px;
+        width: parent.width;
+        height: 20px;
+        progress: counter / 100;
+    }
+}
